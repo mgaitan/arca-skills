@@ -41,6 +41,8 @@ Tratar estos selectores como ayudas, no como contrato eterno: confirmar tambien 
 
 ## Factura C
 
+Para el caso estandar, usar primero el fast path documentado en `SKILL.md`. Las instrucciones siguientes son el fallback interactivo.
+
 1. En Generar, seleccionar un `#puntodeventa` y esperar a que se repueble `#universocomprobante`. Probar puntos hasta hallar `Factura C`; no asumir el primero.
 2. Seleccionar `Factura C` y continuar.
 3. En `DATOS DE EMISION (PASO 1 DE 4)`:
@@ -51,6 +53,15 @@ Tratar estos selectores como ayudas, no como contrato eterno: confirmar tambien 
 4. En datos del receptor, elegir condicion IVA y tipo de documento; cargar CUIT/CUIL/DNI, razon social y condicion de venta. Verificar los datos autocompletados por ARCA.
 5. En detalle, usar cantidad `1` por defecto, unidad apropiada, descripcion concreta y precio unitario final. Factura C no discrimina IVA.
 6. Continuar a `genComResumenDatos.do` y comparar todo el resumen con la intencion preparada.
+
+Detalles verificados que evitan exploracion innecesaria:
+
+- Paso 1: `#idconcepto`, `#fc`, `#fsd`, `#fsh`, `#vencimientopago`.
+- Paso 2: `#idivareceptor`, `#idtipodocreceptor`, `#nrodocreceptor`, `#domicilioreceptorcombo` y checkboxes `formaDePago`.
+- Paso 3: `#detalle_descripcion1`, `#detalle_cantidad1`, `#detalle_medida1`, `#detalle_precio1`, `#imptotal`.
+- Paso 4: URL `genComResumenDatos.do` y boton final `#btngenerar`.
+- La opcion `unidades` comparte valor HTML con `seleccionar...`; elegirla por texto/indice visible, no solamente por `value=7`.
+- `Imprimir...` inicia una descarga. Capturarla con `agent-browser download`; navegar a su URL puede devolver `ERR_ABORTED` aun cuando el PDF sea valido.
 
 No accionar `#btngenerar` ni un boton `Confirmar Datos` sin la confirmacion final requerida por `SKILL.md`.
 

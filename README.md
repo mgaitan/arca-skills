@@ -105,9 +105,10 @@ skills/
     SKILL.md
     agents/openai.yaml
     references/
+    scripts/
 ```
 
-`SKILL.md` contiene las instrucciones operativas. `references/` conserva detalles que se cargan solo cuando hacen falta. `agents/openai.yaml` aporta metadata opcional para la interfaz de Codex y puede ser ignorado por otros agentes.
+`SKILL.md` contiene las instrucciones operativas. `references/` conserva detalles que se cargan solo cuando hacen falta. `scripts/` contiene fast paths deterministas en Python PEP 723 que se ejecutan con `uv run`. `agents/openai.yaml` aporta metadata opcional para la interfaz de Codex y puede ser ignorado por otros agentes.
 
 ## Seguridad y alcance
 

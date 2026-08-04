@@ -23,6 +23,32 @@ Operar el sitio real de ARCA como un flujo fiscal sensible. Usar `agent-browser`
 
 Leer [navegacion-rcel.md](references/navegacion-rcel.md) antes de iniciar sesion o tocar RCEL. Leer [resolucion-datos.md](references/resolucion-datos.md) para resolver representado, cliente, concepto, importe o moneda. Leer [consultas-y-descargas.md](references/consultas-y-descargas.md) para consultas, historial y PDFs.
 
+## Fast path para Factura C
+
+Para una Factura C estandar con receptor, domicilio, descripcion e importe ya resueltos, preferir `scripts/factura_c_fast.py` sobre la navegacion paso a paso. Ejecutarlo siempre mediante `uv run`.
+
+Primera fase, sin emitir:
+
+```bash
+uv run scripts/factura_c_fast.py prepare \
+  --client-cuit 30709533939 \
+  --client-name "LAMBDA SISTEMAS S.R.L." \
+  --address "Iguazu 656" \
+  --description "Consultoria de desarrollo de software" \
+  --amount 990522.00 \
+  --sale-condition "Transferencia Bancaria"
+```
+
+El script inicia sesion, selecciona representado y punto compatible, carga los cuatro pasos, valida el resumen y devuelve `ready_for_confirmation`. Mostrar ese resumen al usuario. Solo despues de recibir confirmacion explicita ejecutar:
+
+```bash
+uv run scripts/factura_c_fast.py confirm --yes
+```
+
+El segundo comando revalida la pantalla, genera, descarga y valida el PDF, devuelve CAE y ruta local, cierra la sesion y elimina el estado temporal. Si el usuario no confirma, ejecutar `uv run scripts/factura_c_fast.py cancel`.
+
+Usar el flujo manual de [navegacion-rcel.md](references/navegacion-rcel.md) para Factura E, Notas de Credito, pre-comprobantes, campos especiales, multiples lineas o cualquier pantalla que el script rechace. No modificar el script sobre la marcha para forzar una pantalla inesperada.
+
 ## Interpretar el pedido
 
 Construir internamente una intencion verificable con:
