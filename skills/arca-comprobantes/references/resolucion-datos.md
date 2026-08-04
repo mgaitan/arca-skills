@@ -13,7 +13,7 @@ ARCADB es una ayuda de lookup, no evidencia de una factura. La pantalla de ARCA 
 
 ## Empresa emisora y concepto
 
-Para inferir el rubro del emisor, consultar su `ARCA_CUIT` exacto en ARCADB y priorizar `clae_actividad`, `actividad` y `complemento_actividad`. Contrastar con la actividad visible en RCEL y descripciones recientes del mismo emisor.
+Para inferir el rubro del emisor, consultar el CUIT autenticado exacto en ARCADB y priorizar `clae_actividad`, `actividad` y `complemento_actividad`. Contrastar con la actividad visible en RCEL y descripciones recientes del mismo emisor.
 
 Orden para decidir la descripcion:
 

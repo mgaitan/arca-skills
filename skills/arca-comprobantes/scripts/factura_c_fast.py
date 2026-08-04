@@ -14,7 +14,6 @@ revalidates that review, generates the invoice, and downloads the official PDF.
 from __future__ import annotations
 
 import argparse
-import getpass
 import json
 import os
 import re
@@ -29,11 +28,16 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from dotenv import dotenv_values, find_dotenv
+from arca_auth import (
+    AuthError,
+    clean_environment,
+    load_env_credentials,
+    login_with_credentials,
+    login_with_profile,
+    resolve_profile,
+)
 from pypdf import PdfReader
 
-LOGIN_URL = "https://auth.afip.gob.ar/contribuyente_/login.xhtml"
-PORTAL_URL_PART = "portalcf.cloud.afip.gob.ar/portal/app"
 RCEL_URL_PART = "fe.afip.gob.ar/rcel"
 RCEL_MENU_URL = "https://fe.afip.gob.ar/rcel/jsp/menu_ppal.jsp"
 STATE_DIR = Path(tempfile.gettempdir()) / "arca-skills"
@@ -92,39 +96,7 @@ def read_state(session: str) -> dict[str, Any]:
 
 
 def subprocess_environment() -> dict[str, str]:
-    environment = os.environ.copy()
-    environment.pop("ARCA_CUIT", None)
-    environment.pop("ARCA_PASSWORD", None)
-    return environment
-
-
-def load_credentials(interactive: bool = False) -> tuple[str, str]:
-    dotenv = find_dotenv(usecwd=True)
-    file_values = dotenv_values(dotenv) if dotenv else {}
-    cuit = (os.environ.get("ARCA_CUIT") or file_values.get("ARCA_CUIT") or "").strip()
-    password = os.environ.get("ARCA_PASSWORD") or file_values.get("ARCA_PASSWORD") or ""
-
-    if interactive and (not cuit or not password):
-        if not sys.stdin.isatty():
-            raise FastPathError(
-                "--prompt-credentials requiere una terminal interactiva; "
-                "ejecutar el comando personalmente, fuera del chat del agente"
-            )
-        if not cuit:
-            cuit = input("CUIT/CUIL de ARCA: ").strip()
-        if not password:
-            password = getpass.getpass("Clave fiscal de ARCA: ")
-
-    if not cuit or not password:
-        raise FastPathError(
-            "Faltan ARCA_CUIT y/o ARCA_PASSWORD en entorno o .env. "
-            "Tambien se puede ejecutar prepare --prompt-credentials personalmente "
-            "desde una terminal; no pegar credenciales en el chat"
-        )
-    normalized_cuit = re.sub(r"\D", "", cuit)
-    if len(normalized_cuit) != 11:
-        raise FastPathError("ARCA_CUIT debe tener 11 digitos")
-    return normalized_cuit, password
+    return clean_environment()
 
 
 def lookup_name(cuit: str) -> str:
@@ -177,20 +149,6 @@ class Browser:
         raw = self.run("eval", script, "--json", quiet=True)
         return self._parse_evaluation(raw)
 
-    def evaluate_stdin(self, script: str) -> Any:
-        result = subprocess.run(
-            self._command("eval", "--stdin", "--json"),
-            env=subprocess_environment(),
-            input=script,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        if result.returncode:
-            message = (result.stderr or result.stdout).strip()
-            raise FastPathError(message or "agent-browser eval --stdin fallo")
-        return self._parse_evaluation(result.stdout)
-
     @staticmethod
     def _parse_evaluation(raw: str) -> Any:
         try:
@@ -201,20 +159,6 @@ class Browser:
         except (json.JSONDecodeError, KeyError) as exc:
             raise FastPathError(f"Respuesta eval inesperada: {raw[:500]}") from exc
 
-    def fill_private(self, selector: str, value: str) -> None:
-        script = """
-        (() => {
-          const node = document.querySelector(%s);
-          if (!node) throw new Error('No existe el campo de credencial');
-          node.value = %s;
-          node.dispatchEvent(new Event('input', {bubbles: true}));
-          node.dispatchEvent(new Event('change', {bubbles: true}));
-          node.dispatchEvent(new Event('blur', {bubbles: true}));
-          return true;
-        })()
-        """ % (json.dumps(selector), json.dumps(value))
-        self.evaluate_stdin(script)
-
     def wait(self, milliseconds: int = 250) -> None:
         self.run("wait", str(milliseconds), quiet=True)
 
@@ -223,17 +167,6 @@ class Browser:
 
     def close(self) -> None:
         self.run("close", check=False, quiet=True)
-
-    def open_login(self) -> None:
-        try:
-            self.run("open", LOGIN_URL, launch=True, quiet=True)
-        except FastPathError as exc:
-            if "No usable sandbox" not in str(exc) or self.browser_args:
-                raise
-            self.close()
-            self.browser_args = "--no-sandbox"
-            self.run("open", LOGIN_URL, launch=True, quiet=True)
-
 
 def set_values(browser: Browser, values: dict[str, str]) -> None:
     script = """
@@ -287,14 +220,7 @@ def select_text(browser: Browser, selector: str, text: str) -> str:
     return str(browser.evaluate(script))
 
 
-def login_and_open_rcel(browser: Browser, cuit: str, password: str) -> None:
-    browser.open_login()
-    browser.fill_private('input[aria-label="CUIT/CUIL"], input[type="number"]', cuit)
-    browser.run("find", "role", "button", "click", "--name", "Siguiente", quiet=True)
-    browser.run("wait", 'input[aria-label="TU CLAVE"], input[type="password"]', quiet=True)
-    browser.fill_private('input[aria-label="TU CLAVE"], input[type="password"]', password)
-    browser.run("find", "role", "button", "click", "--name", "Ingresar", quiet=True)
-    browser.run("wait", "--url", f"**/{PORTAL_URL_PART.split('/', 1)[1]}*", quiet=True)
+def open_rcel(browser: Browser) -> None:
     browser.run("wait", "--text", "Comprobantes en línea", quiet=True)
     browser.evaluate(
         """
@@ -366,7 +292,17 @@ def choose_factura_c_point(browser: Browser, requested: str = "") -> str:
 
 
 def prepare(args: argparse.Namespace) -> int:
-    cuit, password = load_credentials(args.prompt_credentials)
+    try:
+        profile = resolve_profile(args.auth_profile, args.auth_cuit)
+        if profile:
+            cuit = profile.cuit
+            auth_source = f"vault:{profile.name}"
+        else:
+            cuit, password = load_env_credentials()
+            auth_source = "env"
+    except AuthError as exc:
+        raise FastPathError(str(exc)) from exc
+
     represented = args.represented or lookup_name(cuit)
     if not represented:
         raise FastPathError("No se pudo resolver el representado; usar --represented")
@@ -380,7 +316,15 @@ def prepare(args: argparse.Namespace) -> int:
         raise FastPathError("--client-cuit debe tener 11 digitos")
 
     browser = Browser(args.session, args.browser_args or os.environ.get("ARCA_AGENT_BROWSER_ARGS", ""))
-    login_and_open_rcel(browser, cuit, password)
+    try:
+        if profile:
+            login_with_profile(profile, args.session, browser.browser_args)
+        else:
+            login_with_credentials(cuit, password, args.session, browser.browser_args)
+            del password
+    except AuthError as exc:
+        raise FastPathError(str(exc)) from exc
+    open_rcel(browser)
     selected = choose_represented(browser, represented)
     point = choose_factura_c_point(browser, args.point)
 
@@ -471,6 +415,7 @@ def prepare(args: argparse.Namespace) -> int:
         "schema": "arca_factura_c_fast_v1",
         "status": "ready_for_confirmation",
         "session": args.session,
+        "auth_source": auth_source,
         "represented": selected,
         "point": point,
         "client_cuit": client_cuit,
@@ -615,11 +560,8 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--due", default="")
     prepare_parser.add_argument("--session", default="arca-factura-c")
     prepare_parser.add_argument("--browser-args", default="")
-    prepare_parser.add_argument(
-        "--prompt-credentials",
-        action="store_true",
-        help="Pedir credenciales faltantes por TTY sin mostrar la clave",
-    )
+    prepare_parser.add_argument("--auth-profile", default="", help="Perfil vault o alias")
+    prepare_parser.add_argument("--auth-cuit", default="", help="CUIT del perfil vault")
     prepare_parser.set_defaults(handler=prepare)
 
     confirm_parser = subparsers.add_parser("confirm", help="Generar y descargar tras aprobacion")

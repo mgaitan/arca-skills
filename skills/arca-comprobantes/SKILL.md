@@ -17,12 +17,13 @@ Operar el sitio real de ARCA como un flujo fiscal sensible. Usar `agent-browser`
 
    En Linux, si faltan bibliotecas del navegador, recomendar `agent-browser install --with-deps`.
 2. Antes de usarlo, cargar su guia compatible con la version instalada mediante `agent-browser skills get core`.
-3. Obtener `ARCA_CUIT` y `ARCA_PASSWORD` primero de las variables del proceso y, si falta alguna, de un `.env` del directorio de trabajo o sus padres. No imprimir, registrar, interpolar en archivos ni devolver estos valores.
-4. Si siguen faltando, nunca pedirlos por chat ni mediante una herramienta cuya entrada quede en la traza del agente. Indicar al usuario que ejecute personalmente el fast path con `--prompt-credentials` en su propia terminal. El script usa `getpass`, no muestra la clave y no la persiste. Una ejecucion no interactiva debe detenerse.
-5. Usar una sesion efimera dedicada, sin `--restore`, `--state` ni perfiles persistentes. Cerrar la sesion al terminar, incluso ante error.
-6. Resolver Documentos con `xdg-user-dir DOCUMENTS` cuando exista; usar `$HOME/Documentos` como primera alternativa y `$HOME/Documents` como segunda. No descargar facturas dentro de la skill o del repositorio.
+3. Preferir perfiles cifrados del auth vault. Resolver perfil explicito, `ARCA_AUTH_PROFILE`, coincidencia con `ARCA_CUIT`, default configurado o perfil unico, en ese orden. Leer [autenticacion.md](references/autenticacion.md) para altas, multiples CUIT y seleccion por pedidos como `logueate con Natalia`.
+4. Mantener `ARCA_CUIT`/`ARCA_PASSWORD` del entorno o `.env` como fallback. Nunca pedir passwords por chat, imprimirlas ni pasarlas como argumentos. `getpass` se usa solamente al crear un perfil nuevo desde una terminal del usuario, no durante facturacion o consultas.
+5. Si no hay perfil ni `ARCA_CUIT`, preguntar solamente el CUIT/CUIL y un alias opcional, luego indicar `uv run scripts/arca_auth.py add --profile <alias> --cuit <cuit>` para que el usuario complete el alta en su terminal.
+6. Usar una sesion efimera dedicada, sin `--restore`, `--state` ni perfiles persistentes. Cerrar la sesion al terminar, incluso ante error.
+7. Resolver Documentos con `xdg-user-dir DOCUMENTS` cuando exista; usar `$HOME/Documentos` como primera alternativa y `$HOME/Documents` como segunda. No descargar facturas dentro de la skill o del repositorio.
 
-Leer [navegacion-rcel.md](references/navegacion-rcel.md) antes de iniciar sesion o tocar RCEL. Leer [resolucion-datos.md](references/resolucion-datos.md) para resolver representado, cliente, concepto, importe o moneda. Leer [consultas-y-descargas.md](references/consultas-y-descargas.md) para consultas, historial y PDFs.
+Leer [autenticacion.md](references/autenticacion.md) para iniciar sesion o administrar perfiles. Leer [navegacion-rcel.md](references/navegacion-rcel.md) antes de tocar RCEL. Leer [resolucion-datos.md](references/resolucion-datos.md) para resolver representado, cliente, concepto, importe o moneda. Leer [consultas-y-descargas.md](references/consultas-y-descargas.md) para consultas, historial y PDFs.
 
 ## Fast path para Factura C
 
@@ -32,6 +33,7 @@ Primera fase, sin emitir:
 
 ```bash
 uv run scripts/factura_c_fast.py prepare \
+  --auth-profile arca-martin \
   --client-cuit 30709533939 \
   --client-name "LAMBDA SISTEMAS S.R.L." \
   --address "Iguazu 656" \
@@ -46,7 +48,7 @@ El script inicia sesion, selecciona representado y punto compatible, carga los c
 uv run scripts/factura_c_fast.py confirm --yes
 ```
 
-Si faltan credenciales, no ejecutar el prompt desde una herramienta del agente. Dar al usuario el mismo comando `prepare` agregando `--prompt-credentials` para que lo corra en su terminal local; el resto de los argumentos puede conservarse. El CUIT se muestra al escribir y la clave no. Ninguno se guarda.
+`--auth-profile` es opcional cuando hay un default, `ARCA_CUIT` coincide con un perfil o existe un solo perfil. Para `logueate con Natalia`, resolver el alias con `scripts/arca_auth.py login --profile natalia`; si no existe, dar al usuario el comando `auth add` correspondiente para ejecutarlo en su terminal.
 
 El segundo comando revalida la pantalla, genera, descarga y valida el PDF, devuelve CAE y ruta local, cierra la sesion y elimina el estado temporal. Si el usuario no confirma, ejecutar `uv run scripts/factura_c_fast.py cancel`.
 
@@ -73,7 +75,7 @@ Si el pedido incluye una captura de transferencia, inspeccionarla y extraer nomb
 Aplicar la cascada de [resolucion-datos.md](references/resolucion-datos.md). Reglas esenciales:
 
 - Respetar una empresa explicita, por ejemplo `desde NATALIA LOBO`.
-- Sin empresa explicita, elegir la representacion cuyo CUIT/denominacion corresponda a `ARCA_CUIT`; no elegir simplemente la primera opcion.
+- Sin empresa explicita, elegir la representacion cuyo CUIT/denominacion corresponda al CUIT autenticado del perfil o fallback; no elegir simplemente la primera opcion.
 - Elegir el punto de venta que ofrezca el tipo solicitado. No fijar numeros: pueden variar por representado.
 - Para nombres abreviados como `Lambda`, preferir una coincidencia reciente y clara del historial del mismo representado; si sigue habiendo duda, preguntar.
 - Usar el rubro del emisor y descripciones recientes para proponer un concepto concreto y veraz cuando el usuario no lo indique.

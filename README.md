@@ -62,39 +62,57 @@ ln -s "$PWD/skills/arca-comprobantes" ~/.agents/skills/arca-comprobantes
 
 El symlink refleja las modificaciones locales sin reinstalar. Una sesion del agente ya iniciada puede requerir reinicio para refrescar metadata o disparadores. `npx skills add` desde una ruta local copia los archivos, por lo que no sirve como instalacion autoactualizable.
 
-## Credenciales
+## Credenciales y perfiles
 
-Cada skill declara las variables que necesita. Para Comprobantes en linea, definirlas en el entorno del proceso o en un `.env` del directorio desde el que se ejecuta el agente:
+La opcion recomendada es el auth vault cifrado de `agent-browser`. Cada CUIT puede tener un alias distinto:
+
+```bash
+uv run skills/arca-comprobantes/scripts/arca_auth.py add \
+  --profile arca-natalia \
+  --cuit 27123456789 \
+  --default
+
+uv run skills/arca-comprobantes/scripts/arca_auth.py add \
+  --profile arca-martin \
+  --cuit 20123456789
+```
+
+El alta debe ejecutarla la persona en su terminal. Si la clave no esta en el `.env` para ese mismo CUIT, se pide una sola vez con `getpass` y se guarda cifrada; nunca se solicita por chat. Listar perfiles, cambiar el default o iniciar una sesion:
+
+```bash
+uv run skills/arca-comprobantes/scripts/arca_auth.py list
+uv run skills/arca-comprobantes/scripts/arca_auth.py default arca-martin
+uv run skills/arca-comprobantes/scripts/arca_auth.py login --profile natalia
+```
+
+La seleccion usa perfil pedido, `ARCA_AUTH_PROFILE`, coincidencia con `ARCA_CUIT`, default configurado o perfil unico. Si hay varios sin default, el agente debe preguntar cual usar.
+
+El `.env` se mantiene como selector y fallback:
 
 ```dotenv
+ARCA_AUTH_PROFILE=arca-martin
 ARCA_CUIT=20123456789
 ARCA_PASSWORD=tu_clave_fiscal
 ```
 
-Las skills no deben imprimir credenciales, persistir cookies ni versionar archivos `.env`. Los documentos descargados se guardan fuera del repositorio.
-
-Si no se quieren persistir credenciales, el fast path de Factura C puede pedir solamente las que falten:
-
-```bash
-uv run skills/arca-comprobantes/scripts/factura_c_fast.py prepare \
-  --prompt-credentials \
-  --client-cuit 30709533939 \
-  --client-name "LAMBDA SISTEMAS S.R.L." \
-  --address "fragmento inequivoco del domicilio" \
-  --description "Servicios de desarrollo de software" \
-  --amount 100000
-```
-
-Este comando debe ejecutarlo la persona en su propia terminal, no a traves del chat. La clave se lee con `getpass`, no se muestra y no se guarda; el CUIT si se muestra mientras se escribe. En una ejecucion no interactiva el script se detiene, evitando que el agente solicite secretos en una conversacion registrada.
+`ARCA_AUTH_PROFILE` es opcional. Si no existe un perfil vault utilizable, `ARCA_CUIT` y `ARCA_PASSWORD` permiten iniciar sesion mediante un perfil cifrado temporal que se elimina inmediatamente. Las skills no imprimen claves, no persisten cookies ni versionan `.env`.
 
 ## Ejemplos: comprobantes
 
 ```text
+Logueate con Natalia
+
+Logueate con el CUIT 20-12345678-9
+
+Usá arca-martin como perfil predeterminado
+
 Hacé la factura a Lambda Sistemas por 2500 dolares en pesos
 
 Factura C a CUIT 20222939098, 120 lucas
 
 Facturar desde NATALIA LOBO a Lionel Andres Messi. Servicios de traduccion. 12 USD MEP en pesos
+
+Con el perfil Natalia, facturá a Lambda 120 lucas
 
 Hacer Factura E a Ruth Puentes por 514 dolares
 

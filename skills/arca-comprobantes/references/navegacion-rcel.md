@@ -10,21 +10,20 @@
 
 ## Login
 
-1. Abrir `https://auth.afip.gob.ar/contribuyente_/login.xhtml`.
-2. Cargar `ARCA_CUIT` en el campo de CUIT y avanzar.
-3. Volver a capturar la pagina; cargar `ARCA_PASSWORD` en `TU CLAVE` y pulsar `Ingresar`.
-4. Esperar el portal `https://portalcf.cloud.afip.gob.ar/portal/app/`.
-5. Abrir `Comprobantes en linea`. Normalmente crea una pestaña en `https://fe.afip.gob.ar/rcel/jsp/index_bis.jsp`; listar pestañas, cambiar a la nueva y volver a inspeccionar.
-6. Ante captcha, segundo factor o desafio no automatizable, pedir intervencion humana sin solicitar el codigo por chat.
+1. Resolver la identidad segun [autenticacion.md](autenticacion.md).
+2. Iniciar una sesion efimera con `uv run scripts/arca_auth.py login --profile <alias> --session <sesion>`; omitir `--profile` cuando corresponda usar el default.
+3. Validar el portal `https://portalcf.cloud.afip.gob.ar/portal/app/`; no confiar solamente en el `loggedIn` interno de `auth login`.
+4. Abrir `Comprobantes en linea`. Normalmente crea una pestaña en `https://fe.afip.gob.ar/rcel/jsp/index_bis.jsp`; listar pestañas, cambiar a la nueva y volver a inspeccionar.
+5. Ante captcha, segundo factor o desafio no automatizable, pedir intervencion humana sin solicitar el codigo por chat.
 
-No pasar secretos como literales en comandos. Expandirlos desde el entorno dentro de la invocacion local y silenciar la salida del comando que completa el campo.
+No pasar secretos como literales en comandos. El auth vault o el perfil temporal creado desde `.env` deben completar la clave sin exponerla al agente.
 
 ## Empresa representada
 
 La pantalla `Seleccione la Empresa a representar` puede renderizar opciones como `input[type=button]` que no aparecen en el snapshot. Inspeccionar sus `value` y comparar nombres normalizados.
 
 - Si el pedido dice `desde X`, seleccionar la coincidencia inequívoca con X.
-- En otro caso, consultar `ARCA_CUIT` en ARCADB y hacer coincidir su `denominacion`; tambien puede usarse la identidad autenticada que muestra RCEL.
+- En otro caso, consultar el CUIT autenticado en ARCADB y hacer coincidir su `denominacion`; tambien puede usarse la identidad autenticada que muestra RCEL.
 - Si las opciones no incluyen CUIT y dos nombres son plausibles, detenerse y preguntar.
 
 Despues de seleccionar, comprobar el encabezado `Representando a` antes de seguir.
