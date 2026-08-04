@@ -1,0 +1,4 @@
+interface:
+  display_name: "ARCA Comprobantes"
+  short_description: "Emite y consulta comprobantes de ARCA"
+  default_prompt: "Usa $arca-comprobantes para preparar una Factura C en ARCA."
