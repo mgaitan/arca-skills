@@ -17,9 +17,10 @@ Operar el sitio real de ARCA como un flujo fiscal sensible. Usar `agent-browser`
 
    En Linux, si faltan bibliotecas del navegador, recomendar `agent-browser install --with-deps`.
 2. Antes de usarlo, cargar su guia compatible con la version instalada mediante `agent-browser skills get core`.
-3. Obtener `ARCA_CUIT` y `ARCA_PASSWORD` primero de las variables del proceso y, si falta alguna, de un `.env` del directorio de trabajo o sus padres. No imprimir, registrar, interpolar en archivos ni devolver estos valores. Si siguen faltando, indicar solamente los nombres requeridos y detenerse.
-4. Usar una sesion efimera dedicada, sin `--restore`, `--state` ni perfiles persistentes. Cerrar la sesion al terminar, incluso ante error.
-5. Resolver Documentos con `xdg-user-dir DOCUMENTS` cuando exista; usar `$HOME/Documentos` como primera alternativa y `$HOME/Documents` como segunda. No descargar facturas dentro de la skill o del repositorio.
+3. Obtener `ARCA_CUIT` y `ARCA_PASSWORD` primero de las variables del proceso y, si falta alguna, de un `.env` del directorio de trabajo o sus padres. No imprimir, registrar, interpolar en archivos ni devolver estos valores.
+4. Si siguen faltando, nunca pedirlos por chat ni mediante una herramienta cuya entrada quede en la traza del agente. Indicar al usuario que ejecute personalmente el fast path con `--prompt-credentials` en su propia terminal. El script usa `getpass`, no muestra la clave y no la persiste. Una ejecucion no interactiva debe detenerse.
+5. Usar una sesion efimera dedicada, sin `--restore`, `--state` ni perfiles persistentes. Cerrar la sesion al terminar, incluso ante error.
+6. Resolver Documentos con `xdg-user-dir DOCUMENTS` cuando exista; usar `$HOME/Documentos` como primera alternativa y `$HOME/Documents` como segunda. No descargar facturas dentro de la skill o del repositorio.
 
 Leer [navegacion-rcel.md](references/navegacion-rcel.md) antes de iniciar sesion o tocar RCEL. Leer [resolucion-datos.md](references/resolucion-datos.md) para resolver representado, cliente, concepto, importe o moneda. Leer [consultas-y-descargas.md](references/consultas-y-descargas.md) para consultas, historial y PDFs.
 
@@ -44,6 +45,8 @@ El script inicia sesion, selecciona representado y punto compatible, carga los c
 ```bash
 uv run scripts/factura_c_fast.py confirm --yes
 ```
+
+Si faltan credenciales, no ejecutar el prompt desde una herramienta del agente. Dar al usuario el mismo comando `prepare` agregando `--prompt-credentials` para que lo corra en su terminal local; el resto de los argumentos puede conservarse. El CUIT se muestra al escribir y la clave no. Ninguno se guarda.
 
 El segundo comando revalida la pantalla, genera, descarga y valida el PDF, devuelve CAE y ruta local, cierra la sesion y elimina el estado temporal. Si el usuario no confirma, ejecutar `uv run scripts/factura_c_fast.py cancel`.
 

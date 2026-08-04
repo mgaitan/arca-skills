@@ -16,7 +16,7 @@ El repositorio esta preparado para incorporar otras areas de ARCA como skills in
 
 ## Requisitos
 
-- Node.js y npm.
+- uv y npm.
 - [agent-browser](https://github.com/vercel-labs/agent-browser):
 
   ```bash
@@ -72,6 +72,20 @@ ARCA_PASSWORD=tu_clave_fiscal
 ```
 
 Las skills no deben imprimir credenciales, persistir cookies ni versionar archivos `.env`. Los documentos descargados se guardan fuera del repositorio.
+
+Si no se quieren persistir credenciales, el fast path de Factura C puede pedir solamente las que falten:
+
+```bash
+uv run skills/arca-comprobantes/scripts/factura_c_fast.py prepare \
+  --prompt-credentials \
+  --client-cuit 30709533939 \
+  --client-name "LAMBDA SISTEMAS S.R.L." \
+  --address "fragmento inequivoco del domicilio" \
+  --description "Servicios de desarrollo de software" \
+  --amount 100000
+```
+
+Este comando debe ejecutarlo la persona en su propia terminal, no a traves del chat. La clave se lee con `getpass`, no se muestra y no se guarda; el CUIT si se muestra mientras se escribe. En una ejecucion no interactiva el script se detiene, evitando que el agente solicite secretos en una conversacion registrada.
 
 ## Ejemplos: comprobantes
 

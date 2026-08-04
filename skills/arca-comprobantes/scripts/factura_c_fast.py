@@ -14,6 +14,7 @@ revalidates that review, generates the invoice, and downloads the official PDF.
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import re
@@ -28,9 +29,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from dotenv import find_dotenv, load_dotenv
+from dotenv import dotenv_values, find_dotenv
 from pypdf import PdfReader
-
 
 LOGIN_URL = "https://auth.afip.gob.ar/contribuyente_/login.xhtml"
 PORTAL_URL_PART = "portalcf.cloud.afip.gob.ar/portal/app"
@@ -91,15 +91,40 @@ def read_state(session: str) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def load_credentials() -> tuple[str, str]:
+def subprocess_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.pop("ARCA_CUIT", None)
+    environment.pop("ARCA_PASSWORD", None)
+    return environment
+
+
+def load_credentials(interactive: bool = False) -> tuple[str, str]:
     dotenv = find_dotenv(usecwd=True)
-    if dotenv:
-        load_dotenv(dotenv, override=False)
-    cuit = os.environ.get("ARCA_CUIT", "").strip()
-    password = os.environ.get("ARCA_PASSWORD", "")
+    file_values = dotenv_values(dotenv) if dotenv else {}
+    cuit = (os.environ.get("ARCA_CUIT") or file_values.get("ARCA_CUIT") or "").strip()
+    password = os.environ.get("ARCA_PASSWORD") or file_values.get("ARCA_PASSWORD") or ""
+
+    if interactive and (not cuit or not password):
+        if not sys.stdin.isatty():
+            raise FastPathError(
+                "--prompt-credentials requiere una terminal interactiva; "
+                "ejecutar el comando personalmente, fuera del chat del agente"
+            )
+        if not cuit:
+            cuit = input("CUIT/CUIL de ARCA: ").strip()
+        if not password:
+            password = getpass.getpass("Clave fiscal de ARCA: ")
+
     if not cuit or not password:
-        raise FastPathError("Faltan ARCA_CUIT y/o ARCA_PASSWORD en entorno o .env")
-    return re.sub(r"\D", "", cuit), password
+        raise FastPathError(
+            "Faltan ARCA_CUIT y/o ARCA_PASSWORD en entorno o .env. "
+            "Tambien se puede ejecutar prepare --prompt-credentials personalmente "
+            "desde una terminal; no pegar credenciales en el chat"
+        )
+    normalized_cuit = re.sub(r"\D", "", cuit)
+    if len(normalized_cuit) != 11:
+        raise FastPathError("ARCA_CUIT debe tener 11 digitos")
+    return normalized_cuit, password
 
 
 def lookup_name(cuit: str) -> str:
@@ -136,6 +161,7 @@ class Browser:
     ) -> str:
         result = subprocess.run(
             self._command(*args, launch=launch),
+            env=subprocess_environment(),
             text=True,
             capture_output=True,
             check=False,
@@ -149,6 +175,24 @@ class Browser:
 
     def evaluate(self, script: str) -> Any:
         raw = self.run("eval", script, "--json", quiet=True)
+        return self._parse_evaluation(raw)
+
+    def evaluate_stdin(self, script: str) -> Any:
+        result = subprocess.run(
+            self._command("eval", "--stdin", "--json"),
+            env=subprocess_environment(),
+            input=script,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode:
+            message = (result.stderr or result.stdout).strip()
+            raise FastPathError(message or "agent-browser eval --stdin fallo")
+        return self._parse_evaluation(result.stdout)
+
+    @staticmethod
+    def _parse_evaluation(raw: str) -> Any:
         try:
             payload = json.loads(raw)
             if not payload.get("success"):
@@ -156,6 +200,20 @@ class Browser:
             return payload["data"]["result"]
         except (json.JSONDecodeError, KeyError) as exc:
             raise FastPathError(f"Respuesta eval inesperada: {raw[:500]}") from exc
+
+    def fill_private(self, selector: str, value: str) -> None:
+        script = """
+        (() => {
+          const node = document.querySelector(%s);
+          if (!node) throw new Error('No existe el campo de credencial');
+          node.value = %s;
+          node.dispatchEvent(new Event('input', {bubbles: true}));
+          node.dispatchEvent(new Event('change', {bubbles: true}));
+          node.dispatchEvent(new Event('blur', {bubbles: true}));
+          return true;
+        })()
+        """ % (json.dumps(selector), json.dumps(value))
+        self.evaluate_stdin(script)
 
     def wait(self, milliseconds: int = 250) -> None:
         self.run("wait", str(milliseconds), quiet=True)
@@ -231,10 +289,10 @@ def select_text(browser: Browser, selector: str, text: str) -> str:
 
 def login_and_open_rcel(browser: Browser, cuit: str, password: str) -> None:
     browser.open_login()
-    browser.run("fill", 'input[aria-label="CUIT/CUIL"], input[type="number"]', cuit, quiet=True)
+    browser.fill_private('input[aria-label="CUIT/CUIL"], input[type="number"]', cuit)
     browser.run("find", "role", "button", "click", "--name", "Siguiente", quiet=True)
     browser.run("wait", 'input[aria-label="TU CLAVE"], input[type="password"]', quiet=True)
-    browser.run("fill", 'input[aria-label="TU CLAVE"], input[type="password"]', password, quiet=True)
+    browser.fill_private('input[aria-label="TU CLAVE"], input[type="password"]', password)
     browser.run("find", "role", "button", "click", "--name", "Ingresar", quiet=True)
     browser.run("wait", "--url", f"**/{PORTAL_URL_PART.split('/', 1)[1]}*", quiet=True)
     browser.run("wait", "--text", "Comprobantes en línea", quiet=True)
@@ -308,7 +366,7 @@ def choose_factura_c_point(browser: Browser, requested: str = "") -> str:
 
 
 def prepare(args: argparse.Namespace) -> int:
-    cuit, password = load_credentials()
+    cuit, password = load_credentials(args.prompt_credentials)
     represented = args.represented or lookup_name(cuit)
     if not represented:
         raise FastPathError("No se pudo resolver el representado; usar --represented")
@@ -436,7 +494,11 @@ def prepare(args: argparse.Namespace) -> int:
 def documents_dir() -> Path:
     if shutil.which("xdg-user-dir"):
         result = subprocess.run(
-            ["xdg-user-dir", "DOCUMENTS"], text=True, capture_output=True, check=False
+            ["xdg-user-dir", "DOCUMENTS"],
+            env=subprocess_environment(),
+            text=True,
+            capture_output=True,
+            check=False,
         ).stdout.strip()
         if result and result != str(Path.home()):
             return Path(result)
@@ -553,6 +615,11 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--due", default="")
     prepare_parser.add_argument("--session", default="arca-factura-c")
     prepare_parser.add_argument("--browser-args", default="")
+    prepare_parser.add_argument(
+        "--prompt-credentials",
+        action="store_true",
+        help="Pedir credenciales faltantes por TTY sin mostrar la clave",
+    )
     prepare_parser.set_defaults(handler=prepare)
 
     confirm_parser = subparsers.add_parser("confirm", help="Generar y descargar tras aprobacion")
