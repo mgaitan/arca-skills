@@ -1,18 +1,18 @@
 # ARCA Skills
 
-Coleccion de Agent Skills para interactuar con los servicios web de **ARCA** (antes AFIP) mediante un navegador controlado por un agente.
+Colección de Agent Skills para interactuar con los servicios web de **ARCA** (antes AFIP) mediante un navegador controlado por un agente.
 
-El proyecto automatiza los mismos portales y formularios que utiliza una persona. No integra Web Services fiscales, no requiere instalar certificados, no administra claves privadas y no necesita SDKs SOAP ni homologacion de WSAA/WSFE.
+El proyecto automatiza los mismos portales y formularios que utiliza una persona. No integra Web Services fiscales, no requiere instalar certificados, no administra claves privadas y no necesita SDKs SOAP ni homologación de WSAA/WSFE.
 
-Las skills usan [agent-browser](https://agent-browser.dev/) para iniciar sesion, inspeccionar la pantalla actual, completar formularios, consultar informacion y descargar documentos oficiales. Cada operacion sensible mantiene una revision humana antes de confirmar cambios irreversibles.
+Las skills usan [agent-browser](https://agent-browser.dev/) para iniciar sesión, inspeccionar la pantalla actual, completar formularios, consultar información y descargar documentos oficiales. Cada operación sensible mantiene una revisión humana antes de confirmar cambios irreversibles.
 
 ## Skills disponibles
 
 | Skill | Estado | Alcance |
 | --- | --- | --- |
-| `arca-comprobantes` | Inicial | Facturas C, Facturas de Exportacion E, pre-comprobantes, Notas de Credito, consultas y descarga de PDFs. |
+| `arca-comprobantes` | Inicial | Facturas C, Facturas de Exportación E, pre-comprobantes, Notas de Crédito, consultas y descarga de PDFs. |
 
-El repositorio esta preparado para incorporar otras areas de ARCA como skills independientes. Separarlas mantiene disparadores claros y permite aplicar controles acordes al riesgo de cada servicio.
+El repositorio está preparado para incorporar otras áreas de ARCA como skills independientes. Separarlas mantiene disparadores claros y permite aplicar controles acordes al riesgo de cada servicio.
 
 ## Requisitos
 
@@ -25,9 +25,9 @@ El repositorio esta preparado para incorporar otras areas de ARCA como skills in
   agent-browser skills get core
   ```
 
-En Linux, usar `agent-browser install --with-deps` si faltan dependencias del navegador. `agent-browser skills get core` carga las instrucciones correspondientes a la version instalada.
+En Linux, usar `agent-browser install --with-deps` si faltan dependencias del navegador. `agent-browser skills get core` carga las instrucciones correspondientes a la versión instalada.
 
-## Instalacion
+## Instalación
 
 Instalar una skill concreta con `npx skills`:
 
@@ -41,7 +41,7 @@ Instalar todas las skills disponibles:
 npx skills add mgaitan/arca-skills -g -a codex -s '*' -y
 ```
 
-Con GitHub CLI 2.92 o posterior (`gh skill` esta en preview):
+Con GitHub CLI 2.92 o posterior (`gh skill` está en preview):
 
 ```bash
 gh skill install mgaitan/arca-skills arca-comprobantes --agent codex --scope user
@@ -60,11 +60,11 @@ mkdir -p ~/.agents/skills
 ln -s "$PWD/skills/arca-comprobantes" ~/.agents/skills/arca-comprobantes
 ```
 
-El symlink refleja las modificaciones locales sin reinstalar. Una sesion del agente ya iniciada puede requerir reinicio para refrescar metadata o disparadores. `npx skills add` desde una ruta local copia los archivos, por lo que no sirve como instalacion autoactualizable.
+El symlink refleja las modificaciones locales sin reinstalar. Una sesión del agente ya iniciada puede requerir reinicio para refrescar metadata o disparadores. `npx skills add` desde una ruta local copia los archivos, por lo que no sirve como instalación autoactualizable.
 
 ## Credenciales y perfiles
 
-La opcion recomendada es el auth vault cifrado de `agent-browser`. Cada CUIT puede tener un alias distinto:
+La opción recomendada es el auth vault cifrado de `agent-browser`. Cada CUIT puede tener un alias distinto:
 
 ```bash
 uv run skills/arca-comprobantes/scripts/arca_auth.py add \
@@ -77,7 +77,7 @@ uv run skills/arca-comprobantes/scripts/arca_auth.py add \
   --cuit 20123456789
 ```
 
-El alta debe ejecutarla la persona en su terminal. Si la clave no esta en el `.env` para ese mismo CUIT, se pide una sola vez con `getpass` y se guarda cifrada; nunca se solicita por chat. Listar perfiles, cambiar el default o iniciar una sesion:
+El alta debe ejecutarla la persona en su terminal. Si la clave no está en el `.env` para ese mismo CUIT, se pide una sola vez con `getpass` y se guarda cifrada; nunca se solicita por chat. Listar perfiles, cambiar el default o iniciar una sesión:
 
 ```bash
 uv run skills/arca-comprobantes/scripts/arca_auth.py list
@@ -85,7 +85,7 @@ uv run skills/arca-comprobantes/scripts/arca_auth.py default arca-martin
 uv run skills/arca-comprobantes/scripts/arca_auth.py login --profile natalia
 ```
 
-La seleccion usa perfil pedido, `ARCA_AUTH_PROFILE`, coincidencia con `ARCA_CUIT`, default configurado o perfil unico. Si hay varios sin default, el agente debe preguntar cual usar.
+La selección usa perfil pedido, `ARCA_AUTH_PROFILE`, coincidencia con `ARCA_CUIT`, default configurado o perfil único. Si hay varios sin default, el agente debe preguntar cuál usar.
 
 El `.env` se mantiene como selector y fallback:
 
@@ -95,7 +95,7 @@ ARCA_CUIT=20123456789
 ARCA_PASSWORD=tu_clave_fiscal
 ```
 
-`ARCA_AUTH_PROFILE` es opcional. Si no existe un perfil vault utilizable, `ARCA_CUIT` y `ARCA_PASSWORD` permiten iniciar sesion mediante un perfil cifrado temporal que se elimina inmediatamente. Las skills no imprimen claves, no persisten cookies ni versionan `.env`.
+`ARCA_AUTH_PROFILE` es opcional. Si no existe un perfil vault utilizable, `ARCA_CUIT` y `ARCA_PASSWORD` permiten iniciar sesión mediante un perfil cifrado temporal que se elimina inmediatamente. Las skills no imprimen claves, no persisten cookies ni versionan `.env`.
 
 ## Ejemplos: comprobantes
 
@@ -106,21 +106,21 @@ Logueate con el CUIT 20-12345678-9
 
 Usá arca-martin como perfil predeterminado
 
-Hacé la factura a Lambda Sistemas por 2500 dolares en pesos
+Hacé la factura a Lambda Sistemas por 2500 dólares en pesos
 
 Factura C a CUIT 20222939098, 120 lucas
 
-Facturar desde NATALIA LOBO a Lionel Andres Messi. Servicios de traduccion. 12 USD MEP en pesos
+Facturar desde NATALIA LOBO a Lionel Andrés Messi. Servicios de traducción. 12 USD MEP en pesos
 
 Con el perfil Natalia, facturá a Lambda 120 lucas
 
-Hacer Factura E a Ruth Puentes por 514 dolares
+Hacer Factura E a Ruth Puentes por 514 dólares
 
 Facturar esta transferencia recibida <captura con info>
 
-Hacer la Nota de Credito de la ultima factura a Lambda
+Hacer la Nota de Crédito de la última factura a Lambda
 
-¿Cuanto le facture a Lambda Sistemas en el ultimo año?
+¿Cuánto le facturé a Lambda Sistemas en el último año?
 ```
 
 Las facturas descargadas se guardan en una ruta como:
@@ -144,6 +144,6 @@ skills/
 
 ## Seguridad y alcance
 
-Estas skills automatizan navegacion y controles operativos; no reemplazan asesoramiento contable, fiscal, laboral o legal. ARCA y los documentos oficiales descargados son la fuente final de cada operacion.
+Estas skills automatizan navegación y controles operativos; no reemplazan asesoramiento contable, fiscal, laboral o legal. ARCA y los documentos oficiales descargados son la fuente final de cada operación.
 
 Antes de publicar cambios, verificar que Git no contenga credenciales, cookies, capturas, PDFs, datos de contribuyentes ni exports de los portales.
