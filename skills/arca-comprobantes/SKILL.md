@@ -17,11 +17,13 @@ Operar el sitio real de ARCA como un flujo fiscal sensible. Usar `agent-browser`
 
    En Linux, si faltan bibliotecas del navegador, recomendar `agent-browser install --with-deps`.
 2. Antes de usarlo, cargar su guia compatible con la version instalada mediante `agent-browser skills get core`.
-3. Preferir perfiles cifrados del auth vault. Resolver perfil explicito, `ARCA_AUTH_PROFILE`, coincidencia con `ARCA_CUIT`, default configurado o perfil unico, en ese orden. Leer [autenticacion.md](references/autenticacion.md) para altas, multiples CUIT y seleccion por pedidos como `logueate con Natalia`.
-4. Mantener `ARCA_CUIT`/`ARCA_PASSWORD` del entorno o `.env` como fallback. Nunca pedir passwords por chat, imprimirlas ni pasarlas como argumentos. `getpass` se usa solamente al crear un perfil nuevo desde una terminal del usuario, no durante facturacion o consultas.
-5. Si no hay perfil ni `ARCA_CUIT`, preguntar solamente el CUIT/CUIL y un alias opcional, luego indicar `uv run scripts/arca_auth.py add --profile <alias> --cuit <cuit>` para que el usuario complete el alta en su terminal.
-6. Usar una sesion efimera dedicada, sin `--restore`, `--state` ni perfiles persistentes. Cerrar la sesion al terminar, incluso ante error.
-7. Resolver Documentos con `xdg-user-dir DOCUMENTS` cuando exista; usar `$HOME/Documentos` como primera alternativa y `$HOME/Documents` como segunda. No descargar facturas dentro de la skill o del repositorio.
+3. Ejecutar los helpers desde `skills/arca-comprobantes`, donde viven `scripts/` y la metadata de dependencias embebida en cada helper. Si se parte de la raiz del repositorio, usar `cd skills/arca-comprobantes` antes de los comandos de esta skill.
+4. Ejecutar `agent-browser doctor --offline --quick` si el primer comando de navegador falla. En Linux, si informa `No usable sandbox`, repetir el login con `--browser-args=--no-sandbox`; el `=` evita que argparse interprete el valor como otra opcion.
+5. Preferir perfiles cifrados del auth vault. Resolver perfil explicito, `ARCA_AUTH_PROFILE`, coincidencia con `ARCA_CUIT`, default configurado o perfil unico, en ese orden. Leer [autenticacion.md](references/autenticacion.md) para altas, multiples CUIT y seleccion por pedidos como `logueate con Natalia`.
+6. Mantener `ARCA_CUIT`/`ARCA_PASSWORD` del entorno o `.env` como fallback. Nunca pedir passwords por chat, imprimirlas ni pasarlas como argumentos. `getpass` se usa solamente al crear un perfil nuevo desde una terminal del usuario, no durante facturacion o consultas.
+7. Si no hay perfil ni `ARCA_CUIT`, preguntar solamente el CUIT/CUIL y un alias opcional, luego indicar `uv run scripts/arca_auth.py add --profile <alias> --cuit <cuit>` para que el usuario complete el alta en su terminal.
+8. Usar una sesion efimera dedicada, sin `--restore`, `--state` ni perfiles persistentes. Cerrar la sesion al terminar, incluso ante error.
+9. Resolver Documentos con `xdg-user-dir DOCUMENTS` cuando exista; usar `$HOME/Documentos` como primera alternativa y `$HOME/Documents` como segunda. No descargar facturas dentro de la skill o del repositorio.
 
 Leer [autenticacion.md](references/autenticacion.md) para iniciar sesion o administrar perfiles. Leer [navegacion-rcel.md](references/navegacion-rcel.md) antes de tocar RCEL. Leer [resolucion-datos.md](references/resolucion-datos.md) para resolver representado, cliente, concepto, importe o moneda. Leer [consultas-y-descargas.md](references/consultas-y-descargas.md) para consultas, historial y PDFs.
 
@@ -32,6 +34,7 @@ Para una Factura C estandar con receptor, domicilio, descripcion e importe ya re
 Primera fase, sin emitir:
 
 ```bash
+# Desde skills/arca-comprobantes
 uv run scripts/factura_c_fast.py prepare \
   --auth-profile arca-martin \
   --client-cuit 30709533939 \
@@ -45,6 +48,7 @@ uv run scripts/factura_c_fast.py prepare \
 El script inicia sesion, selecciona representado y punto compatible, carga los cuatro pasos, valida el resumen y devuelve `ready_for_confirmation`. Mostrar ese resumen al usuario. Solo despues de recibir confirmacion explicita ejecutar:
 
 ```bash
+# Desde skills/arca-comprobantes
 uv run scripts/factura_c_fast.py confirm --yes
 ```
 
@@ -95,6 +99,8 @@ Aplicar la cascada de [resolucion-datos.md](references/resolucion-datos.md). Reg
 3. Para un borrador, guardar como pre-comprobante cuando RCEL ofrezca esa accion. Informar el numero de transaccion y que no existe PDF fiscal todavia.
 4. Para una emision, mostrar un resumen breve y pedir confirmacion explicita inmediatamente antes de `Confirmar Datos`, `Generar` o cualquier accion que produzca CAE/comprobante. Una confirmacion anterior o ambigua no elimina este control.
 5. Tras confirmar, descargar el PDF oficial y validarlo segun [consultas-y-descargas.md](references/consultas-y-descargas.md).
+
+Si RCEL abre un segundo modal con `Confirmar`, volver a mostrar el resumen y pedir confirmacion antes de ese clic final. No interpretar como error real el texto estatico u oculto de un bloque `Error`; despues de emitir, la evidencia de exito es un control visible `Imprimir...` o equivalente y un PDF oficial valido con CAE.
 
 No afirmar exito al llegar a la pantalla de revision. El exito requiere comprobante generado, datos finales coherentes y PDF oficial descargado.
 

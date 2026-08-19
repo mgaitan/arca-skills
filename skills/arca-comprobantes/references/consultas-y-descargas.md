@@ -29,10 +29,12 @@ Recorrer paginacion completa. Si RCEL limita el intervalo o los resultados, divi
 
 1. Resolver el directorio Documentos del sistema.
 2. Crear `<Documentos>/facturas/<cliente-slug>_<cliente-cuit>/`. Construir el slug desde la razon social: minusculas, transliteracion ASCII, espacios y signos convertidos a `_`, guiones bajos repetidos colapsados y bordes recortados. Usar el CUIT con 11 digitos sin guiones. Ejemplo: `Lambda Sistemas S.R.L.` y `30712345678` -> `lambda_sistemas_srl_30712345678`. Para Factura E sin CUIT argentino, usar el identificador tributario extranjero normalizado; si tampoco existe, terminar en `sin_cuit` y advertirlo.
-3. Desde el resultado o detalle oficial, identificar el control que descarga/imprime el PDF. Usar `agent-browser download <selector> <ruta-destino>` para capturar la descarga.
+3. Desde el resultado o detalle oficial, identificar el control que descarga/imprime el PDF. Tomar un snapshot inmediatamente antes para obtener un ref fresco y usar `agent-browser download <selector> <ruta-destino>`; no abrir directamente la URL de impresion.
 4. Preservar el nombre oficial cuando sea seguro. Si no lo es, usar `Factura_<tipo>_<punto>_<numero>.pdf`. No sobrescribir: agregar un sufijo incremental.
-5. Verificar que el archivo exista, no este vacio y sea PDF. Comprobar dentro del documento, cuando las herramientas locales lo permitan: tipo, emisor, receptor, CUIT/identificador, punto de venta, numero, fecha, moneda, total y CAE/autorizacion.
+5. Verificar que el archivo exista, no este vacio y sea PDF. Comprobar dentro del documento, cuando las herramientas locales lo permitan: tipo, emisor, receptor, CUIT/identificador, punto de venta, numero, fecha, moneda, total y CAE/autorizacion. Una comprobacion minima util es `file <pdf>` y `pdftotext -layout <pdf> -` buscando esos campos.
 6. Si la descarga falla, volver al detalle autenticado y reintentar una vez. No crear un PDF mediante `agent-browser pdf`: eso imprime la pagina y no reemplaza el comprobante oficial.
+
+El HTML de la pantalla final puede contener mensajes estaticos como `Error! No se pudo generar el Comprobante` dentro de un bloque oculto. Considerar emitido solo si aparece un control visible `Imprimir...` o equivalente y el PDF descargado contiene un CAE y los datos esperados.
 
 Nunca guardar PDFs, capturas, exports, cookies o datos de clientes en el directorio de la skill.
 

@@ -17,9 +17,10 @@ Si no existe ningun perfil y tampoco `ARCA_CUIT`, preguntar el CUIT y un alias o
 
 ## Administrar perfiles
 
-Ejecutar los helpers con `uv run` desde la skill:
+Ejecutar los helpers con `uv run` desde `skills/arca-comprobantes`:
 
 ```bash
+# cd /ruta/al/arca-skill/skills/arca-comprobantes
 uv run scripts/arca_auth.py list
 uv run scripts/arca_auth.py add --profile arca-natalia --default
 uv run scripts/arca_auth.py add --profile arca-martin --cuit 20123456789
@@ -27,6 +28,14 @@ uv run scripts/arca_auth.py default arca-martin
 uv run scripts/arca_auth.py login --profile natalia --session arca-operacion
 uv run scripts/arca_auth.py login --cuit 20123456789 --session arca-operacion
 ```
+
+Si Chrome no puede iniciar por el sandbox de Linux, diagnosticar primero con `agent-browser doctor --offline --quick` y repetir solo el login afectado:
+
+```bash
+uv run scripts/arca_auth.py login --session arca-operacion --browser-args=--no-sandbox
+```
+
+No agregar `--no-sandbox` por defecto: usarlo solo cuando el diagnóstico o el error de Chrome lo indique.
 
 `auth add` toma el CUIT de `--cuit` o `ARCA_CUIT`; si falta y hay TTY, lo pregunta. Para la clave usa `ARCA_PASSWORD` solamente cuando corresponde al mismo `ARCA_CUIT`; en otro caso la pide una vez con `getpass`. El agente debe dar el comando para que el usuario lo ejecute personalmente y nunca pedir la clave por chat.
 
