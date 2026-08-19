@@ -7,6 +7,8 @@
 - RCEL contiene HTML antiguo que a veces no aparece en el arbol accesible. Si el snapshot esta vacio, usar `read`, selectores CSS estables o una inspeccion DOM acotada con `eval`; no hacer clic por coordenadas ni por posicion.
 - No imprimir valores de inputs de CUIT o clave en snapshots, logs o respuestas.
 - Mantener una sola sesion efimera para login, RCEL y descarga. Cerrar con `agent-browser --session "$SESSION" close`.
+- Despues de cada `select`, `click` o submit que repueble la pagina, tomar un snapshot nuevo. Un `@ref` puede quedar obsoleto aunque la URL no cambie.
+- En formularios con datepicker, mascara o AJAX, verificar el valor real con `get value` o un selector CSS despues de `fill`. Un comando que devuelve `Done` no garantiza que el valor haya quedado en el input.
 
 ## Login
 
@@ -42,7 +44,7 @@ Tratar estos selectores como ayudas, no como contrato eterno: confirmar tambien 
 
 Para el caso estandar, usar primero el fast path documentado en `SKILL.md`. Las instrucciones siguientes son el fallback interactivo.
 
-1. En Generar, seleccionar un `#puntodeventa` y esperar a que se repueble `#universocomprobante`. Probar puntos hasta hallar `Factura C`; no asumir el primero.
+1. En Generar, enumerar los puntos disponibles en `#puntodeventa`, seleccionar uno y esperar a que se repueble `#universocomprobante`. Inspeccionar el texto de sus opciones y probar los puntos hasta hallar `Factura C`; no asumir el primero ni fijar un numero de punto.
 2. Seleccionar `Factura C` y continuar.
 3. En `DATOS DE EMISION (PASO 1 DE 4)`:
    - elegir Productos, Servicios o ambos en `#idconcepto`;
@@ -62,14 +64,17 @@ Detalles verificados que evitan exploracion innecesaria:
 - La opcion `unidades` comparte valor HTML con `seleccionar...`; elegirla por texto/indice visible, no solamente por `value=7`.
 - `Imprimir...` inicia una descarga. Capturarla con `agent-browser download`; navegar a su URL puede devolver `ERR_ABORTED` aun cuando el PDF sea valido.
 
-No accionar `#btngenerar` ni un boton `Confirmar Datos` sin la confirmacion final requerida por `SKILL.md`.
+No accionar `#btngenerar`, `Confirmar Datos` ni el `Confirmar` de un modal sin la confirmacion final requerida por `SKILL.md`.
 
 ## Factura E
 
-1. Recorrer puntos de venta hasta que `#universocomprobante` ofrezca `Factura de Exportacion E`.
-2. Usar USD salvo instruccion expresa compatible. Completar pais, identificacion tributaria o documento extranjero, domicilio, idioma/condicion de venta y datos de exportacion exigidos por la pantalla.
-3. No inventar identificadores extranjeros ni datos aduaneros. Pedir cualquier campo obligatorio que no pueda obtenerse del pedido, ARCADB o historial.
-4. Llegar a revision, validar receptor, moneda USD, importe y punto de venta, y aplicar la misma confirmacion final.
+1. Recorrer los puntos disponibles y seleccionar el primero que, tras repoblar `#universocomprobante`, ofrezca por texto `Factura de Exportacion E`. Registrar el punto elegido en la intencion; nunca copiar un numero de otra factura o de un ejemplo.
+2. En el paso 1, elegir `Servicios` cuando la operacion sea un servicio, marcar moneda extranjera y elegir `Dolar Estadounidense` si corresponde. Verificar `#tipocambio` renderizado por ARCA. La casilla visible `#cancelacionMonedaExtranjera` puede aparecer como `El pago se realiza en la misma moneda`; no escribir sobre su input hidden equivalente.
+3. Distinguir fecha de emision de fecha de pago. Completar `#fc` y `#vencimientopago` por separado y verificar ambos valores. Si RCEL rechaza una fecha de pago anterior a la actual, no cambiarla silenciosamente: informar la restriccion, preparar un nuevo resumen con la fecha valida y pedir confirmacion de la modificacion.
+4. En el paso 2, seleccionar primero el pais en `#destino` y esperar la validacion AJAX. Luego completar y verificar `#nrodocreceptor` (CUIT pais), `#nrodocextranjeroreceptor` (ID impositivo o documento extranjero), `#razonsocialreceptor`, `#domicilioreceptor` y `#descripcionformadepago`. La seleccion del pais puede limpiar o completar campos; por eso el nombre y el resto de los datos se cargan despues.
+5. En el paso 3, cargar una linea con `#detalle_descripcion1`, `#detalle_cantidad1`, `#detalle_medida1` y `#detalle_precio1`, y comprobar `#imptotal`. Para servicios, dejar la unidad sin seleccionar solo si el historial oficial o RCEL lo permite; no reemplazarla automaticamente por `unidades`.
+6. No inventar identificadores extranjeros, incoterms ni datos aduaneros. Pedir cualquier campo obligatorio que no pueda obtenerse del pedido, la captura, ARCADB o el historial oficial.
+7. Llegar a revision, validar receptor, fechas, moneda, cotizacion, importe, descripcion y punto de venta, y aplicar la confirmacion final en cada modal que pueda producir CAE.
 
 ## Nota de Credito para anular
 

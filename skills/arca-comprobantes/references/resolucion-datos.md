@@ -11,6 +11,10 @@ Aplicar esta cascada dentro de la empresa representada elegida:
 
 ARCADB es una ayuda de lookup, no evidencia de una factura. La pantalla de ARCA y el PDF oficial son la fuente final de los datos facturados.
 
+Cuando una factura reciente se use como plantilla, inspeccionar el detalle oficial o su PDF y copiar solo los datos que siguen siendo semanticamente validos. El punto de venta, la fecha, la cotizacion, el importe y la condicion de pago deben volver a resolverse para la nueva operacion.
+
+En Factura E distinguir `CUIT País`, `ID Impositivo` y documento extranjero. Una captura de transferencia puede mostrar varios numeros que no tienen etiqueta fiscal; asignarlos a un campo de ARCA solo si el historial oficial o una fuente del pedido lo confirma. Si no se puede distinguir, pedir el dato en vez de intercambiar identificadores por semejanza.
+
 ## Empresa emisora y concepto
 
 Para inferir el rubro del emisor, consultar el CUIT autenticado exacto en ARCADB y priorizar `clae_actividad`, `actividad` y `complemento_actividad`. Contrastar con la actividad visible en RCEL y descripciones recientes del mismo emisor.
