@@ -451,6 +451,55 @@ def documents_dir() -> Path:
     return spanish if spanish.exists() else Path.home() / "Documents"
 
 
+def confirmation_modal_text(browser: Browser) -> str:
+    modal = browser.evaluate(
+        """
+        (() => {
+          const visible = node => {
+            const style = getComputedStyle(node);
+            return node.getClientRects().length > 0 && style.display !== 'none'
+              && style.visibility !== 'hidden';
+          };
+          const label = node => (node.innerText || node.value || node.getAttribute('aria-label') || '').trim();
+          const roots = [...document.querySelectorAll(
+            '[role="dialog"], [role="alertdialog"], [aria-modal="true"], .modal, .modal-dialog, .ui-dialog, .ui-dialog-content, .swal2-popup, .bootbox'
+          )].filter(visible).filter(root =>
+            [...root.querySelectorAll('button, input[type="button"], input[type="submit"], [role="button"]')]
+              .some(button => visible(button) && /^confirmar$/i.test(label(button)))
+          );
+          if (!roots.length) return {error: 'No hay un dialogo visible con boton Confirmar'};
+          const root = roots.reduce((largest, candidate) =>
+            candidate.innerText.length > largest.innerText.length ? candidate : largest
+          );
+          return {text: root.innerText || ''};
+        })()
+        """
+    )
+    if not isinstance(modal, dict) or modal.get("error") or not modal.get("text", "").strip():
+        reason = modal.get("error", "respuesta inesperada") if isinstance(modal, dict) else "respuesta inesperada"
+        raise FastPathError(f"No se pudo validar el modal de confirmacion: {reason}")
+    return str(modal["text"])
+
+
+def validate_confirmation_modal(text: str, state: dict[str, Any]) -> None:
+    expected = {
+        "CUIT del receptor": state["client_cuit"],
+        "receptor": state["client_name"],
+        "descripcion": state["description"],
+        "importe": f"{Decimal(state['amount_ars']):,.2f}"
+        .replace(",", "X")
+        .replace(".", ",")
+        .replace("X", "."),
+    }
+    visible = normalized(text)
+    missing = [label for label, value in expected.items() if normalized(value) not in visible]
+    if missing:
+        raise FastPathError(
+            "El modal no coincide con el resumen aprobado; no se confirmo. "
+            f"No aparecen: {', '.join(missing)}"
+        )
+
+
 def unique_destination(directory: Path, filename: str) -> Path:
     path = directory / filename
     counter = 2
@@ -479,6 +528,7 @@ def confirm(args: argparse.Namespace) -> int:
 
         browser.run("click", "#btngenerar", quiet=True)
         browser.wait(150)
+        validate_confirmation_modal(confirmation_modal_text(browser), state)
         browser.run("find", "role", "button", "click", "--name", "Confirmar", quiet=True)
         browser.wait(300)
         generated = browser.evaluate(
