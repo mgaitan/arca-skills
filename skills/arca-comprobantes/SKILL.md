@@ -70,7 +70,7 @@ Construir internamente una intencion verificable con:
 - punto de venta compatible;
 - destino de descarga.
 
-Aceptar lenguaje argentino: `una luca` = ARS 1.000, `120 lucas` = ARS 120.000, `un palo` = ARS 1.000.000 y `dos palos y medio` = ARS 2.500.000. Interpretar `$` como pesos salvo que el usuario diga USD o dolares. No completar una ambiguedad material con una suposicion silenciosa.
+Aceptar lenguaje argentino: `una luca` = ARS 1.000, `120 lucas` = ARS 120.000, `un palo` = ARS 1.000.000 y `dos palos y medio` = ARS 2.500.000. Interpretar `$` como pesos salvo que el usuario diga USD o dolares. Una expresion monetaria como `650 USD MEP x 1.549,81` indica el total a convertir, no 650 unidades: usar cantidad `1` y el total convertido como precio unitario, salvo que el usuario especifique cantidad de unidades. Si no queda claro si la multiplicacion expresa una conversion o cantidad por precio, preguntar antes de preparar el comprobante.
 
 Si el pedido incluye una captura de transferencia, inspeccionarla y extraer nombre, CUIT/CUIL, importe, fecha y referencia visibles. Tratar la captura como entrada, no subirla a ARCA ni conservarla en artefactos. Resolver al receptor con esas pistas y pedir aclaracion solo si hay mas de una coincidencia plausible o falta un dato fiscal requerido.
 
@@ -87,7 +87,8 @@ Aplicar la cascada de [resolucion-datos.md](references/resolucion-datos.md). Reg
 ## Moneda
 
 - Emitir Factura C en pesos por defecto.
-- Si el usuario da USD `en pesos`, convertir a ARS con la columna **Compra** de la fila `Dolar BNA` de El Cronista. Si dice MEP, usar **Compra** de `Dolar MEP`. Obtener la cotizacion renderizada en el momento y calcular `USD * compra`, redondeado a dos decimales.
+- Si el usuario da USD `en pesos` y proporciona una cotizacion, usar esa tasa para calcular `USD * cotizacion`, redondeado a dos decimales. Mostrarla como cotizacion proporcionada por el usuario, sin atribuirle una fecha de mercado.
+- Si no proporciona cotizacion, usar la columna **Compra** de la fila `Dolar BNA` de El Cronista. Si dice MEP, usar **Compra** de `Dolar MEP`. Obtener la cotizacion renderizada en el momento y calcular `USD * compra`, redondeado a dos decimales.
 - Si pide que el comprobante quede expresado en dolares, no convertir el importe: activar moneda extranjera y elegir Dolar Estadounidense. Verificar el tipo de cambio que muestre ARCA sin reemplazarlo por una cotizacion inventada.
 - Emitir Factura E en dolares por defecto y usar un punto de venta que ofrezca Factura de Exportacion E.
 - Si El Cronista no carga o no permite identificar sin duda fila, columna y fecha, informar el bloqueo; no sustituir otra fuente de forma silenciosa.
@@ -97,10 +98,10 @@ Aplicar la cascada de [resolucion-datos.md](references/resolucion-datos.md). Reg
 1. Navegar hasta la revision final siguiendo [navegacion-rcel.md](references/navegacion-rcel.md).
 2. Validar en pantalla empresa, tipo, punto de venta, receptor, fechas, concepto, detalle, moneda, cotizacion e importe total.
 3. Para un borrador, guardar como pre-comprobante cuando RCEL ofrezca esa accion. Informar el numero de transaccion y que no existe PDF fiscal todavia.
-4. Para una emision, mostrar un resumen breve y pedir confirmacion explicita inmediatamente antes de `Confirmar Datos`, `Generar` o cualquier accion que produzca CAE/comprobante. Una confirmacion anterior o ambigua no elimina este control.
+4. Para una emision, mostrar un resumen breve y pedir una sola confirmacion explicita antes de iniciar la secuencia final de emision. Esa confirmacion cubre `Confirmar Datos`, `Generar` y cualquier modal posterior de ARCA, siempre que los datos sigan coincidiendo con el resumen aprobado.
 5. Tras confirmar, descargar el PDF oficial y validarlo segun [consultas-y-descargas.md](references/consultas-y-descargas.md).
 
-Si RCEL abre un segundo modal con `Confirmar`, volver a mostrar el resumen y pedir confirmacion antes de ese clic final. No interpretar como error real el texto estatico u oculto de un bloque `Error`; despues de emitir, la evidencia de exito es un control visible `Imprimir...` o equivalente y un PDF oficial valido con CAE.
+Si RCEL abre un segundo modal con `Confirmar`, comparar sus datos visibles con el resumen aprobado y, si coinciden, completar ese clic sin volver a pedir confirmacion. Si aparece una diferencia material, un dato nuevo o la confirmacion original fue ambigua, detenerse y resolverlo con el usuario antes de seguir. No interpretar como error real el texto estatico u oculto de un bloque `Error`; despues de emitir, la evidencia de exito es un control visible `Imprimir...` o equivalente y un PDF oficial valido con CAE.
 
 No afirmar exito al llegar a la pantalla de revision. El exito requiere comprobante generado, datos finales coherentes y PDF oficial descargado.
 

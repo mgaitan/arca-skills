@@ -74,7 +74,7 @@ No accionar `#btngenerar`, `Confirmar Datos` ni el `Confirmar` de un modal sin l
 4. En el paso 2, seleccionar primero el pais en `#destino` y esperar la validacion AJAX. Luego completar y verificar `#nrodocreceptor` (CUIT pais), `#nrodocextranjeroreceptor` (ID impositivo o documento extranjero), `#razonsocialreceptor`, `#domicilioreceptor` y `#descripcionformadepago`. La seleccion del pais puede limpiar o completar campos; por eso el nombre y el resto de los datos se cargan despues.
 5. En el paso 3, cargar una linea con `#detalle_descripcion1`, `#detalle_cantidad1`, `#detalle_medida1` y `#detalle_precio1`, y comprobar `#imptotal`. Para servicios, dejar la unidad sin seleccionar solo si el historial oficial o RCEL lo permite; no reemplazarla automaticamente por `unidades`.
 6. No inventar identificadores extranjeros, incoterms ni datos aduaneros. Pedir cualquier campo obligatorio que no pueda obtenerse del pedido, la captura, ARCADB o el historial oficial.
-7. Llegar a revision, validar receptor, fechas, moneda, cotizacion, importe, descripcion y punto de venta, y aplicar la confirmacion final en cada modal que pueda producir CAE.
+7. Llegar a revision y validar receptor, fechas, moneda, cotizacion, importe, descripcion y punto de venta. Pedir una sola confirmacion; si aparece un modal posterior, validar que los datos coincidan con el resumen aprobado y confirmarlo sin volver a preguntar.
 
 ## Nota de Credito para anular
 
