@@ -41,19 +41,23 @@ Normalizar expresiones antes de navegar:
 
 Usar aritmetica decimal y redondeo a dos decimales. Mostrar en el resumen previo tanto el importe original como la conversion.
 
+Una multiplicacion de moneda por cotizacion calcula el total del comprobante; no convierte el primer factor en cantidad de articulos. Por ejemplo, `650 USD MEP x 1.549,81` significa ARS 1.007.376,50 como total y, salvo indicacion distinta, una linea con cantidad `1`. En cambio, `650 unidades a $1.549,81` expresa cantidad `650` y precio unitario ARS 1.549,81.
+
 ## Conversion USD a ARS
 
-1. Abrir con `agent-browser` la pagina renderizada `https://www.cronista.com/MercadosOnline/monedas.html`.
-2. Localizar la tabla que tiene columnas `Compra`, `Venta`, `Variacion`.
-3. Para oficial usar la fila exacta `Dolar BNA`; para MEP usar `Dolar MEP`. No confundir con Blue, MEP Contado, CCL, Tarjeta o Mayorista.
-4. Leer el primer valor de la fila, correspondiente a Compra, junto con la fecha visible de la pagina.
-5. Convertir formato argentino (`1.523,88` -> `1523.88`) y calcular `importe_usd * compra` con precision decimal.
-6. Redondear el total final a centavos y conservar tasa, tipo y fecha en el resumen de revision.
+1. Si el usuario proporciona una cotizacion, usarla para el calculo y mostrarla como proporcionada por el usuario. No reemplazarla por otra tasa ni inventar una fecha de mercado.
+2. Si falta la cotizacion, abrir con `agent-browser` la pagina renderizada `https://www.cronista.com/MercadosOnline/monedas.html`.
+3. Localizar la tabla que tiene columnas `Compra`, `Venta`, `Variacion`.
+4. Para oficial usar la fila exacta `Dolar BNA`; para MEP usar `Dolar MEP`. No confundir con Blue, MEP Contado, CCL, Tarjeta o Mayorista.
+5. Leer el primer valor de la fila, correspondiente a Compra, junto con la fecha visible de la pagina.
+6. Convertir formato argentino (`1.523,88` -> `1523.88`) y calcular `importe_usd * compra` con precision decimal.
+7. Redondear el total final a centavos y conservar tasa, tipo y fecha en el resumen de revision. Para una tasa dada por el usuario, identificarla como tal y no atribuirle una fecha consultada.
 
 Ejemplos:
 
 - `2500 dolares en pesos`: Factura C en ARS; USD 2.500 por Compra de Dolar BNA.
 - `12 usd MEP en pesos`: Factura C en ARS; USD 12 por Compra de Dolar MEP.
+- `650 dolares MEP en pesos a 1.549,81`: total ARS 1.007.376,50; cantidad `1` y precio unitario ARS 1.007.376,50.
 - `expresada en dolares`: mantener el importe nominal en USD y usar moneda extranjera en ARCA; no aplicar esta conversion.
 
 No reutilizar una cotizacion de una ejecucion anterior.
