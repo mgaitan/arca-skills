@@ -291,6 +291,7 @@ def choose_factura_c_point(browser: Browser, requested: str = "") -> str:
     if requested:
         points = [point for point in points if requested in point["text"]]
     for point in points:
+        browser.evaluate("document.querySelector('#universocomprobante').options.length = 0")
         browser.run("select", "#puntodeventa", str(point["value"]), quiet=True)
         browser.run(
             "wait", "--fn",
