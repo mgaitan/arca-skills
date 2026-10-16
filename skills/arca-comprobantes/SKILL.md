@@ -16,7 +16,7 @@ Operar el sitio real de ARCA como un flujo fiscal sensible. Usar `agent-browser`
    ```
 
    En Linux, si faltan bibliotecas del navegador, recomendar `agent-browser install --with-deps`.
-2. Antes de usarlo, cargar su guia compatible con la version instalada mediante `agent-browser skills get core`.
+2. Antes de usarlo, cargar su guia compatible con la version instalada mediante `agent-browser skills get core`, salvo que ya este cargada en esta conversacion.
 3. Ejecutar los helpers desde `skills/arca-comprobantes`, donde viven `scripts/` y la metadata de dependencias embebida en cada helper. Si se parte de la raiz del repositorio, usar `cd skills/arca-comprobantes` antes de los comandos de esta skill.
 4. Ejecutar `agent-browser doctor --offline --quick` si el primer comando de navegador falla. En Linux, si informa `No usable sandbox`, repetir el login con `--browser-args=--no-sandbox`; el `=` evita que argparse interprete el valor como otra opcion.
 5. Preferir perfiles cifrados del auth vault. Resolver perfil explicito, `ARCA_AUTH_PROFILE`, coincidencia con `ARCA_CUIT`, default configurado o perfil unico, en ese orden. Leer [autenticacion.md](references/autenticacion.md) para altas, multiples CUIT y seleccion por pedidos como `logueate con Natalia`.
@@ -25,11 +25,13 @@ Operar el sitio real de ARCA como un flujo fiscal sensible. Usar `agent-browser`
 8. Usar una sesion efimera dedicada, sin `--restore`, `--state` ni perfiles persistentes. Cerrar la sesion al terminar, incluso ante error.
 9. Resolver Documentos con `xdg-user-dir DOCUMENTS` cuando exista; usar `$HOME/Documentos` como primera alternativa y `$HOME/Documents` como segunda. No descargar facturas dentro de la skill o del repositorio.
 
-Leer [autenticacion.md](references/autenticacion.md) para iniciar sesion o administrar perfiles. Leer [navegacion-rcel.md](references/navegacion-rcel.md) antes de tocar RCEL. Leer [resolucion-datos.md](references/resolucion-datos.md) para resolver representado, cliente, concepto, importe o moneda. Leer [consultas-y-descargas.md](references/consultas-y-descargas.md) para consultas, historial y PDFs.
+Leer solo las referencias necesarias: [autenticacion.md](references/autenticacion.md) para gestionar perfiles o resolver problemas de acceso; [resolucion-datos.md](references/resolucion-datos.md) para resolver cliente, concepto, importe o moneda; [navegacion-rcel.md](references/navegacion-rcel.md) antes de usar el flujo manual; [consultas-y-descargas.md](references/consultas-y-descargas.md) para consultas, historial y descargas manuales.
 
 ## Fast path para Factura C
 
-Para una Factura C estandar con receptor, domicilio, descripcion e importe ya resueltos, preferir `scripts/factura_c_fast.py` sobre la navegacion paso a paso. Ejecutarlo siempre mediante `uv run`.
+Para una Factura C estandar con CUIT, nombre fiscal, condicion IVA, descripcion e importe resueltos, usar `scripts/factura_c_fast.py` directamente, sin iniciar sesion ni recorrer RCEL por separado. El helper ya resuelve autenticacion, representado, punto de venta y descarga. Ejecutarlo siempre mediante `uv run`.
+
+No hace falta conocer el domicilio de antemano: si ARCA devuelve uno solo, el helper lo selecciona y lo incluye en el resumen. Usar `--address` solo para indicar un domicilio concreto; si hay varios o el fragmento es ambiguo, se detiene sin emitir. Pasar `--iva-condition` segun la condicion fiscal resuelta; el default es `IVA Responsable Inscripto`.
 
 Primera fase, sin emitir:
 
@@ -39,13 +41,12 @@ uv run scripts/factura_c_fast.py prepare \
   --auth-profile arca-martin \
   --client-cuit 30709533939 \
   --client-name "LAMBDA SISTEMAS S.R.L." \
-  --address "Iguazu 656" \
   --description "Consultoria de desarrollo de software" \
   --amount 990522.00 \
   --sale-condition "Transferencia Bancaria"
 ```
 
-El script inicia sesion, selecciona representado y punto compatible, carga los cuatro pasos, valida el resumen y devuelve `ready_for_confirmation`. Mostrar ese resumen al usuario. Solo despues de recibir confirmacion explicita ejecutar:
+El script inicia sesion, selecciona representado y punto compatible, carga los cuatro pasos, valida el resumen y devuelve `ready_for_confirmation`. Mostrar ese resumen al usuario y pedir una sola confirmacion. Una respuesta como `confirmo, hace la factura` autoriza toda la secuencia final, incluido el modal generico de ARCA; no volver a preguntar si los datos siguen coincidiendo. Solo despues de recibir esa confirmacion ejecutar:
 
 ```bash
 # Desde skills/arca-comprobantes
@@ -54,7 +55,7 @@ uv run scripts/factura_c_fast.py confirm --yes
 
 `--auth-profile` es opcional cuando hay un default, `ARCA_CUIT` coincide con un perfil o existe un solo perfil. Para `logueate con Natalia`, resolver el alias con `scripts/arca_auth.py login --profile natalia`; si no existe, dar al usuario el comando `auth add` correspondiente para ejecutarlo en su terminal.
 
-El segundo comando revalida la pantalla, genera, descarga y valida el PDF, devuelve CAE y ruta local, cierra la sesion y elimina el estado temporal. Si el usuario no confirma, ejecutar `uv run scripts/factura_c_fast.py cancel`.
+El segundo comando revalida la pantalla, acepta el modal generico conocido, espera el boton visible `Imprimir...`, descarga y valida el PDF, devuelve CAE y ruta local, cierra la sesion y elimina el estado temporal. Si el usuario no confirma, ejecutar `uv run scripts/factura_c_fast.py cancel`. Si falla o vence una espera despues del clic final, consultar primero si ARCA genero el comprobante; no repetir la emision automaticamente.
 
 Usar el flujo manual de [navegacion-rcel.md](references/navegacion-rcel.md) para Factura E, Notas de Credito, pre-comprobantes, campos especiales, multiples lineas o cualquier pantalla que el script rechace. No modificar el script sobre la marcha para forzar una pantalla inesperada.
 
@@ -97,10 +98,10 @@ Aplicar la cascada de [resolucion-datos.md](references/resolucion-datos.md). Reg
 1. Navegar hasta la revision final siguiendo [navegacion-rcel.md](references/navegacion-rcel.md).
 2. Validar en pantalla empresa, tipo, punto de venta, receptor, fechas, concepto, detalle, moneda, cotizacion e importe total.
 3. Para un borrador, guardar como pre-comprobante cuando RCEL ofrezca esa accion. Informar el numero de transaccion y que no existe PDF fiscal todavia.
-4. Para una emision, mostrar un resumen breve y pedir confirmacion explicita inmediatamente antes de `Confirmar Datos`, `Generar` o cualquier accion que produzca CAE/comprobante. Una confirmacion anterior o ambigua no elimina este control.
+4. Para una emision, mostrar un resumen breve y pedir una sola confirmacion explicita antes de iniciar la secuencia final. Esa autorizacion cubre los botones y modales posteriores mientras los datos coincidan; si cambian datos materiales, detenerse y resolver la diferencia.
 5. Tras confirmar, descargar el PDF oficial y validarlo segun [consultas-y-descargas.md](references/consultas-y-descargas.md).
 
-Si RCEL abre un segundo modal con `Confirmar`, volver a mostrar el resumen y pedir confirmacion antes de ese clic final. No interpretar como error real el texto estatico u oculto de un bloque `Error`; despues de emitir, la evidencia de exito es un control visible `Imprimir...` o equivalente y un PDF oficial valido con CAE.
+Si RCEL abre un segundo modal generico con `Confirmar`, completarlo con la misma autorizacion. Si muestra datos nuevos o diferentes, inspeccionarlos y resolver cualquier diferencia material antes de seguir. No interpretar como error real el texto estatico u oculto de un bloque `Error`; despues de emitir, la evidencia de exito es un control visible `Imprimir...` o equivalente y un PDF oficial valido con CAE.
 
 No afirmar exito al llegar a la pantalla de revision. El exito requiere comprobante generado, datos finales coherentes y PDF oficial descargado.
 
