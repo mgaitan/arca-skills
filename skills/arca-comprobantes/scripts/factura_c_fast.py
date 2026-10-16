@@ -39,7 +39,6 @@ from arca_auth import (
 from pypdf import PdfReader
 
 RCEL_URL_PART = "fe.afip.gob.ar/rcel"
-RCEL_MENU_URL = "https://fe.afip.gob.ar/rcel/jsp/menu_ppal.jsp"
 STATE_DIR = Path(tempfile.gettempdir()) / "arca-skills"
 
 
@@ -168,6 +167,23 @@ class Browser:
     def close(self) -> None:
         self.run("close", check=False, quiet=True)
 
+
+def choose_address(addresses: list[dict[str, str]], requested: str = "") -> dict[str, str]:
+    available = [
+        item for item in addresses
+        if normalized(item["text"]) not in ("", "otro", "seleccionar")
+    ]
+    if requested:
+        wanted = normalized(requested)
+        available = [item for item in available if wanted and wanted in normalized(item["text"])]
+    if len(available) != 1:
+        choices = "; ".join(item["text"] for item in available)
+        raise FastPathError(
+            f"No hay un domicilio unico para {requested!r}; usar --address. Coincidencias: {choices}"
+        )
+    return available[0]
+
+
 def set_values(browser: Browser, values: dict[str, str]) -> None:
     script = """
     (() => {
@@ -259,9 +275,7 @@ def choose_represented(browser: Browser, represented: str) -> str:
     })()
     """ % json.dumps(represented, ensure_ascii=False)
     selected = str(browser.evaluate(script))
-    browser.wait(250)
-    if "menu_ppal.jsp" not in browser.url():
-        browser.run("open", RCEL_MENU_URL, quiet=True)
+    browser.run("wait", "#btn_gen_cmp", quiet=True)
     body = str(browser.evaluate("document.body.innerText"))
     if "Representando a" not in body:
         raise FastPathError("No se pudo validar la empresa representada")
@@ -270,7 +284,7 @@ def choose_represented(browser: Browser, represented: str) -> str:
 
 def choose_factura_c_point(browser: Browser, requested: str = "") -> str:
     browser.run("click", "#btn_gen_cmp", quiet=True)
-    browser.run("wait", "--load", "domcontentloaded", quiet=True)
+    browser.run("wait", "#puntodeventa", quiet=True)
     points = browser.evaluate(
         "[...document.querySelector('#puntodeventa').options].filter(o => o.value).map(o => ({value:o.value,text:o.text.trim()}))"
     )
@@ -278,7 +292,12 @@ def choose_factura_c_point(browser: Browser, requested: str = "") -> str:
         points = [point for point in points if requested in point["text"]]
     for point in points:
         browser.run("select", "#puntodeventa", str(point["value"]), quiet=True)
-        browser.wait(150)
+        browser.run(
+            "wait", "--fn",
+            "[...document.querySelector('#universocomprobante').options]"
+            ".some(option => !/seleccionar|recuperando/i.test(option.text))",
+            quiet=True,
+        )
         types = browser.evaluate(
             "[...document.querySelector('#universocomprobante').options].map(o => ({value:o.value,text:o.text.trim()}))"
         )
@@ -286,7 +305,7 @@ def choose_factura_c_point(browser: Browser, requested: str = "") -> str:
         if invoice:
             browser.run("select", "#universocomprobante", str(invoice["value"]), quiet=True)
             click_value(browser, "Continuar >")
-            browser.wait(200)
+            browser.run("wait", "#idconcepto", quiet=True)
             return str(point["text"])
     raise FastPathError("Ningun punto de venta ofrece Factura C")
 
@@ -339,13 +358,17 @@ def prepare(args: argparse.Namespace) -> int:
         },
     )
     click_value(browser, "Continuar >")
-    browser.wait(200)
+    browser.run("wait", "#idivareceptor", quiet=True)
 
     select_text(browser, "#idivareceptor", args.iva_condition)
-    browser.wait(150)
     select_text(browser, "#idtipodocreceptor", "CUIT")
     set_values(browser, {"#nrodocreceptor": client_cuit})
-    browser.wait(700)
+    browser.run(
+        "wait", "--fn",
+        "document.querySelector('#razonsocialreceptor')?.value.trim() && "
+        "document.querySelector('#domicilioreceptorcombo')?.options.length > 0",
+        quiet=True,
+    )
     receiver = browser.evaluate(
         """
         (() => ({
@@ -357,18 +380,7 @@ def prepare(args: argparse.Namespace) -> int:
     )
     if normalized(args.client_name) not in normalized(receiver["name"]):
         raise FastPathError(f"ARCA devolvio otro receptor: {receiver['name']!r}")
-    address = next(
-        (
-            item
-            for item in receiver["addresses"]
-            if normalized(args.address) in normalized(item["text"])
-            or normalized(item["text"]) in normalized(args.address)
-        ),
-        None,
-    )
-    if not address:
-        available = "; ".join(item["text"] for item in receiver["addresses"] if item["text"])
-        raise FastPathError(f"No coincide domicilio {args.address!r}. Disponibles: {available}")
+    address = choose_address(receiver["addresses"], args.address)
     browser.run("select", "#domicilioreceptorcombo", str(address["value"]), quiet=True)
     payment_script = """
     (() => {
@@ -385,7 +397,7 @@ def prepare(args: argparse.Namespace) -> int:
     """ % json.dumps(args.sale_condition, ensure_ascii=False)
     browser.evaluate(payment_script)
     click_value(browser, "Continuar >")
-    browser.wait(200)
+    browser.run("wait", "#detalle_descripcion1", quiet=True)
 
     set_values(
         browser,
@@ -396,12 +408,11 @@ def prepare(args: argparse.Namespace) -> int:
         },
     )
     select_text(browser, "#detalle_medida1", "unidades")
-    browser.wait(150)
     loaded_total = str(browser.evaluate("document.querySelector('#imptotal')?.value || ''"))
     if Decimal(loaded_total or "0") != amount:
         raise FastPathError(f"Total cargado inesperado: {loaded_total}")
     click_value(browser, "Continuar >")
-    browser.wait(200)
+    browser.run("wait", "#btngenerar", quiet=True)
 
     review = browser.evaluate("({url:location.href,text:document.body.innerText})")
     expected = [client_cuit, args.client_name, args.description]
@@ -460,6 +471,30 @@ def unique_destination(directory: Path, filename: str) -> Path:
     return path
 
 
+def validate_confirmation_modal(browser: Browser) -> None:
+    modal = browser.evaluate(
+        """
+        (() => {
+          const visible = node => node.getClientRects().length > 0
+            && getComputedStyle(node).visibility !== 'hidden';
+          const roots = [...document.querySelectorAll('[role="dialog"], .modal, .ui-dialog, .swal2-popup')]
+            .filter(visible).filter(root => [...root.querySelectorAll('button, input[type="button"]')]
+              .some(button => visible(button)
+                && /^confirmar$/i.test((button.innerText || button.value || '').trim())));
+          if (roots.length !== 1) return '';
+          return roots[0].innerText;
+        })()
+        """
+    )
+    message = normalized(str(modal or "")).replace(" ", "")
+    if not re.fullmatch(
+        r"(?:generarcomprobante)?(?:close)?ustedestaporgenerarunnuevocomprobante"
+        r"confirmalaoperacioncancelarconfirmar",
+        message,
+    ):
+        raise FastPathError("Modal de confirmacion inesperado; no se confirmo la emision")
+
+
 def confirm(args: argparse.Namespace) -> int:
     if not args.yes:
         raise FastPathError("Confirmacion bloqueada: volver a ejecutar con --yes tras aprobacion humana")
@@ -478,13 +513,14 @@ def confirm(args: argparse.Namespace) -> int:
             raise FastPathError("La revision ya no coincide en importe")
 
         browser.run("click", "#btngenerar", quiet=True)
-        browser.wait(150)
-        browser.run("find", "role", "button", "click", "--name", "Confirmar", quiet=True)
-        browser.wait(300)
+        browser.run("wait", ".modal, [role=dialog], .ui-dialog, .swal2-popup", quiet=True)
+        validate_confirmation_modal(browser)
+        browser.run("find", "role", "button", "click", "--name", "Confirmar", "--exact", quiet=True)
+        browser.run("wait", 'input[type="button"][value="Imprimir..."]', quiet=True)
         generated = browser.evaluate(
-            "({generated:/Comprobante Generado/.test(document.body.innerText), id:typeof idComprobante === 'undefined' ? '' : String(idComprobante)})"
+            "({id:typeof idComprobante === 'undefined' ? '' : String(idComprobante)})"
         )
-        if not generated["generated"] or not generated["id"]:
+        if not generated["id"]:
             raise FastPathError("ARCA no confirmo la generacion")
 
         with tempfile.TemporaryDirectory(prefix="arca-factura-") as temp_dir:
@@ -546,7 +582,10 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_parser = subparsers.add_parser("prepare", help="Cargar hasta revision final")
     prepare_parser.add_argument("--client-cuit", required=True)
     prepare_parser.add_argument("--client-name", required=True)
-    prepare_parser.add_argument("--address", required=True, help="Texto completo o fragmento inequívoco")
+    prepare_parser.add_argument(
+        "--address", default="",
+        help="Texto completo o fragmento inequívoco; omitir si ARCA devuelve un solo domicilio",
+    )
     prepare_parser.add_argument("--description", required=True)
     prepare_parser.add_argument("--amount", required=True, help="Total final en ARS, punto decimal")
     prepare_parser.add_argument("--iva-condition", default="IVA Responsable Inscripto")
