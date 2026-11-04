@@ -9,6 +9,7 @@
 - Mantener una sola sesion efimera para login, RCEL y descarga. Cerrar con `agent-browser --session "$SESSION" close`.
 - Despues de cada `select`, `click` o submit que repueble la pagina, tomar un snapshot nuevo. Un `@ref` puede quedar obsoleto aunque la URL no cambie.
 - En formularios con datepicker, mascara o AJAX, verificar el valor real con `get value` o un selector CSS despues de `fill`. Un comando que devuelve `Done` no garantiza que el valor haya quedado en el input.
+- Esperar un control visible del paso de destino antes del snapshot, por ejemplo `wait '#puntodeventa'` o `wait '#idivareceptor'`. Una URL nueva o `domcontentloaded` no garantiza que los controles ya esten disponibles.
 
 ## Login
 
@@ -63,6 +64,8 @@ Detalles verificados que evitan exploracion innecesaria:
 - Paso 4: URL `genComResumenDatos.do` y boton final `#btngenerar`.
 - La opcion `unidades` comparte valor HTML con `seleccionar...`; elegirla por texto/indice visible, no solamente por `value=7`.
 - `Imprimir...` inicia una descarga. Capturarla con `agent-browser download`; navegar a su URL puede devolver `ERR_ABORTED` aun cuando el PDF sea valido.
+- Despues de emitir, esperar `wait 'input[type="button"][value="Imprimir..."]'`. `wait --text 'Imprimir'` no detecta necesariamente el `value` del boton y puede agotar el timeout aun con el comprobante generado. No usar el texto oculto `Comprobante Generado` como evidencia de exito.
+- El modal generico de RCEL puede decir solamente `Usted esta por generar un nuevo comprobante. ¿Confirma la Operacion?`, sin repetir los datos fiscales. Validar el resumen aprobado y completar ese modal con la misma autorizacion; ante contenido inesperado, inspeccionarlo antes de continuar.
 
 No accionar `#btngenerar`, `Confirmar Datos` ni el `Confirmar` de un modal sin la confirmacion final requerida por `SKILL.md`.
 
@@ -74,7 +77,7 @@ No accionar `#btngenerar`, `Confirmar Datos` ni el `Confirmar` de un modal sin l
 4. En el paso 2, seleccionar primero el pais en `#destino` y esperar la validacion AJAX. Luego completar y verificar `#nrodocreceptor` (CUIT pais), `#nrodocextranjeroreceptor` (ID impositivo o documento extranjero), `#razonsocialreceptor`, `#domicilioreceptor` y `#descripcionformadepago`. La seleccion del pais puede limpiar o completar campos; por eso el nombre y el resto de los datos se cargan despues.
 5. En el paso 3, cargar una linea con `#detalle_descripcion1`, `#detalle_cantidad1`, `#detalle_medida1` y `#detalle_precio1`, y comprobar `#imptotal`. Para servicios, dejar la unidad sin seleccionar solo si el historial oficial o RCEL lo permite; no reemplazarla automaticamente por `unidades`.
 6. No inventar identificadores extranjeros, incoterms ni datos aduaneros. Pedir cualquier campo obligatorio que no pueda obtenerse del pedido, la captura, ARCADB o el historial oficial.
-7. Llegar a revision, validar receptor, fechas, moneda, cotizacion, importe, descripcion y punto de venta, y aplicar la confirmacion final en cada modal que pueda producir CAE.
+7. Llegar a revision, validar receptor, fechas, moneda, cotizacion, importe, descripcion y punto de venta, y pedir una sola confirmacion. Completar los modales posteriores con esa autorizacion mientras los datos sigan coincidiendo.
 
 ## Nota de Credito para anular
 
